@@ -1,0 +1,245 @@
+---
+title: "An Introduction to Graphical Models"
+author: "Pratik Shah"
+date: "29 May 2020"
+output:
+  pdf_document:
+    fig_width: 5
+  html_document: default
+fontsize: 12pt
+---
+
+## Graphical Models
+1. Directed
+  a. Bayesian Network (Belief Network)
+  b. Hidden Markov Model
+  c. Kalman Filter
+  d. etc...
+2. Undirected
+  a. Markov Network (Markov Random Field)
+  b. Markov Logic Network
+
+## Essence of GM
+1. Capture the variable dependency
+2. Reduce parameters
+3. Compact representation
+4. Factorization of Joint Probability
+
+\newpage
+
+## DATA: Three Random Variables
+```{r echo=TRUE}
+df<-read.table("abcSampleTable.txt",head=TRUE)
+N<-nrow(df)
+df
+```
+
+\newpage
+
+```{r echo=TRUE}
+library(dplyr)
+library(bnlearn)
+```
+
+## Random Variables and Probability Table
+Answer the following probability queries:
+
+1. $P(A=yes,B=yes)$: 
+```{r echo=FALSE}
+df.cond1<-df %>%
+ filter(A=="yes",B=="yes")
+n1<-nrow(df.cond1)
+PAB<-n1/N
+PAB
+```
+2. $P(A=yes|B=yes)$
+```{r echo=FALSE}
+df.cond2<-df %>%
+ filter(B=="yes")
+n2<-nrow(df.cond2)
+PAgB<-n1/n2
+PAgB
+```
+3. $P(A=yes)$
+```{r echo=FALSE}
+n3<-nrow(filter(df,df$A=="yes"))
+PA<-n3/N
+PA
+```
+4. $P(B=yes)$
+```{r echo=FALSE}
+n4<-nrow(filter(df,df$B=="yes"))
+PB<-n4/N
+PB
+```
+5. $P(B=yes|A=yes)$
+```{r echo=FALSE}
+PBgA<-n1/n3
+PBgA
+```
+
+\newpage
+
+## Recollect Bayes' Rule
+$$P(A|B)=\frac{P(B|A)P(A)}{P(B)}$$
+where, 
+
+$P(A|B)$ is *posterior*, $P(B|A)$ is *likelihood*,
+$P(A)$ is *prior* and, $P(B)$ is *evidence*
+
+## Joint Probability
+$$P(AB)=P(B|A)P(A)$$
+$$P(AB)=P(A|B)P(B)$$
+
+\newpage
+
+## Interpretation-1
+```{r echo=FALSE}
+bayes_bn1<-model2network('[A][B|A]')
+plot(bayes_bn1)
+bayes_bn1.fit<-bn.fit(bayes_bn1,df[,-3])
+bayes_bn1.fit
+```
+
+\newpage
+
+## Interpretation-2
+```{r echo=FALSE}
+bayes_bn2<-model2network('[B][A|B]')
+plot(bayes_bn2)
+bayes_bn2.fit<-bn.fit(bayes_bn2,df[,-3])
+bayes_bn2.fit
+```
+
+\newpage
+
+## What about a larger set of variables?
+```{r echo=FALSE}
+bayes_bn31<-hc(df,score="k2")
+bayes_bn31.net<-bn.fit(bayes_bn31,df)
+plot(bayes_bn31)
+bayes_bn31.net
+
+bayes_bn32<-hc(df,score="bic")
+bayes_bn32.net<-bn.fit(bayes_bn32,df)
+plot(bayes_bn32)
+bayes_bn32.net
+```
+
+\newpage
+
+## Let's query these networks
+```{r echo=TRUE}
+set.seed(0)
+ep1 <- cpquery(bayes_bn31.net, event = (A == "yes" & B == "yes"),
+evidence = TRUE, n = 1000)
+ep2 <- cpquery(bayes_bn32.net, event = (B == "yes"  ),
+evidence = (A == "yes"), n = 1000)
+ep1
+ep2
+```
+
+\newpage
+
+## Joint Probability
+```{r echo=TRUE}
+bayes_bn31
+bayes_bn32
+```
+$$P(ABC)=P(C)P(A|C)P(B|A)$$
+$$P(ABC)=P(A)P(B|A)P(C|A)$$
+
+\newpage
+
+## Aha... you have seen a Graphical Model!
+```{r echo=TRUE}
+nbr(bayes_bn32,node="A")
+parents(bayes_bn32,node="A")
+children(bayes_bn32,node="A")
+mb(bayes_bn32,node="A")
+plot(bayes_bn32,highlight=list(nodes="A"))
+arcs(bayes_bn32)
+path(bayes_bn32, from="B", to="C")
+dsep(bayes_bn32, "B","C")
+dsep(bayes_bn32, "B","C","A")
+```
+
+\newpage
+
+## Can we go back to Sample!
+```{r echo=TRUE}
+set.seed(0)
+samples.bn32<-cpdist(bayes_bn32.net, nodes=nodes(bayes_bn32.net), evidence=TRUE, n=20)
+samples.bn32
+```
+
+\newpage
+
+## How many three node Directed Acyclic Graphs?
+![Guesses?](/home/pratik/Dropbox/201910_training_da/how_to_draw_a_monkey_1.jpg)
+
+\newpage
+
+## Need a Larger One?
+```{r echo=TRUE}
+course.grades<-read.table("2020_bn_nb_data.txt",head=TRUE)
+head(course.grades)
+course.grades.net<-hc(course.grades[,-9],score="k2")
+plot(course.grades.net)
+```
+```{r echo=TRUE}
+course.grades.net.fit<-bn.fit(course.grades.net, course.grades[,-9])
+bn.fit.barchart(course.grades.net.fit$EC100)
+```
+
+\newpage
+
+## Naive Bayes Classifier
+
+```{r echo=TRUE}
+library(bnclassify)
+course.grades<-read.table("2020_bn_nb_data.txt",head=TRUE)
+nb.grades<-nb(class="QP",dataset=course.grades)
+plot(nb.grades)
+nb.grades<-lp(nb.grades, course.grades, smooth=0)
+p<-predict(nb.grades, course.grades)
+cm<-table(predicted=p, true=course.grades$QP)
+cm
+```
+
+## Remove MA101
+```{r echo=TRUE}
+nb.grades<-nb(class="QP",dataset=course.grades[,-5])
+plot(nb.grades)
+nb.grades<-lp(nb.grades, course.grades[,-5], smooth=1)
+p<-predict(nb.grades, course.grades[,-5])
+cm<-table(predicted=p, true=course.grades$QP)
+cm
+```
+
+## Conditional Independence Check
+```{r echo=TRUE}
+ci.test("MA101","IT101","QP",course.grades)
+```
+
+\newpage
+
+## Something More Interesting
+```{r echo=TRUE}
+tn <- tan_cl("QP", course.grades)
+tn <- lp(tn, course.grades, smooth = 1)
+plot(tn)
+tn <- lp(tn, course.grades, smooth = 1)
+p <- predict(tn, course.grades)
+cm1<-table(predicted=p, true=course.grades$QP)
+cm1
+```
+
+\newpage
+
+## References
+1. Bayesian Network without Tears by Eugene Charniak
+2. Bayesian Networks with R by Bojan Mihaljevic
+3. bnstruct: an R package for Bayesian Network Structure Learning with missing data by Francesco Sambo and Alberto Franzin
+4. Introduction to Artificial Intelligence by Stuart Russell and Peter Norvig
+
